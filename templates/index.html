@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FT95 Smart Thermometer - Live Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .header h1 i {
+            color: #e74c3c;
+        }
+        
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-radius: 50px;
+            font-weight: 600;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4757;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.connected {
+            background: #2ed573;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .card h2 i {
+            color: #667eea;
+        }
+        
+        .temperature-display {
+            text-align: center;
+            padding: 20px 0;
+        }
+        
+        .temp-value {
+            font-size: 72px;
+            font-weight: 800;
+            color: #e74c3c;
+            line-height: 1;
+            margin-bottom: 10px;
+        }
+        
+        .temp-unit {
+            font-size: 24px;
+            color: #7f8c8d;
+            font-weight: 500;
+        }
+        
+        .temp-details {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #f1f1f1;
+        }
+        
+        .temp-item {
+            text-align: center;
+        }
+        
+        .temp-item .label {
+            display: block;
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        
+        .temp-item .value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f1f1;
+        }
+        
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            color: #636e72;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            color: #2c3e50;
+            font-weight: 600;
+            padding: 6px 12px;
+            background: #f8f9fa;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .info-value.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .info-value.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .history-card {
+            grid-column: 1 / -1;
+        }
+        
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .history-table th {
+            background: #f8f9fa;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .history-table td {
+            padding: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .history-table tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .reading-time {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .reading-temp {
+            font-weight: 700;
+            color: #e74c3c;
+        }
+        
+        .reading-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .status-real {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-simulated {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .footer {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            font-size: 14px;
+        }
+        
+        .footer a {
+            color: #fff;
+            text-decoration: none;
+        }
+        
+        .last-update {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+        
+        .last-update i {
+            animation: spin 60s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .connection-speed {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        
+        .google-sheets-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #34a853;
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>
+                <i class="fas fa-thermometer-half"></i>
+                FT95 Smart Thermometer Dashboard
+            </h1>
+            <div class="status-badge">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </header>
+        
+        <!-- Dashboard -->
+        <main class="dashboard">
+            <!-- Current Temperature Card -->
+            <div class="card">
+                <h2><i class="fas fa-temperature-high"></i> Current Temperature</h2>
+                <div class="temperature-display">
+                    <div class="temp-value" id="currentTempC">--.--</div>
+                    <div class="temp-unit">°C</div>
+                </div>
+                <div class="temp-details">
+                    <div class="temp-item">
+                        <span class="label">Fahrenheit</span>
+                        <div class="value" id="currentTempF">--.--</div>
+                        <div class="temp-unit">°F</div>
+                    </div>
+                    <div class="temp-item">
+                        <span class="label">Last Update</span>
+                        <div class="value" id="lastUpdateTime">--:--:--</div>
+                        <span class="connection-speed" id="updateSpeed"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- System Info Card -->
+            <div class="card">
+                <h2><i class="fas fa-info-circle"></i> System Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Device Status:</span>
+                        <span class="info-value" id="deviceStatus">Disconnected</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Update Interval:</span>
+                        <span class="info-value" id="updateInterval">5s</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">MAC Address:</span>
+                        <span class="info-value" id="macAddress">FF:00:00:00:01:C8</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Connection Type:</span>
+                        <span class="info-value" id="connectionType">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Google Sheets:</span>
+                        <span class="info-value connected" id="sheetsStatus">Active</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Uptime:</span>
+                        <span class="info-value" id="uptime">0s</span>
+                    </div>
+                </div>
+                <div class="google-sheets-badge">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Auto-updating Row 2 in Google Sheets</span>
+                </div>
+            </div>
+            
+            <!-- Recent Readings Card -->
+            <div class="card history-card">
+                <h2><i class="fas fa-history"></i> Recent Readings</h2>
+                <div style="overflow-x: auto;">
+                    <table class="history-table" id="readingsTable">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Date</th>
+                                <th>Temperature (°C)</th>
+                                <th>Temperature (°F)</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="readingsBody">
+                            <tr>
+                                <td colspan="5" style="text-align: center; padding: 40px;">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    Waiting for first reading...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Footer -->
+        <footer class="footer">
+            <p>FT95 Smart Thermometer Monitoring System | Real-time Bluetooth Tracking</p>
+            <div class="last-update">
+                <i class="fas fa-circle"></i>
+                <span>Last sync with Google Sheets: <span id="lastSync">--:--:--</span></span>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Socket.IO connection
+        const socket = io();
+        let lastUpdateTime = Date.now();
+        let readingsHistory = [];
+        let systemStartTime = Date.now();
+        
+        // Update uptime counter
+        function updateUptime() {
+            const uptimeElement = document.getElementById('uptime');
+            const elapsed = Math.floor((Date.now() - systemStartTime) / 1000);
+            
+            const hours = Math.floor(elapsed / 3600);
+            const minutes = Math.floor((elapsed % 3600) / 60);
+            const seconds = elapsed % 60;
+            
+            uptimeElement.textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        // Update connection speed
+        function updateConnectionSpeed() {
+            const now = Date.now();
+            const speed = now - lastUpdateTime;
+            const speedElement = document.getElementById('updateSpeed');
+            
+            if (speed < 1000) {
+                speedElement.textContent = `Updated ${speed}ms ago`;
+                speedElement.style.color = '#2ed573';
+            } else if (speed < 5000) {
+                speedElement.textContent = `Updated ${(speed/1000).toFixed(1)}s ago`;
+                speedElement.style.color = '#ffa502';
+            } else {
+                speedElement.textContent = `Updated ${(speed/1000).toFixed(1)}s ago`;
+                speedElement.style.color = '#ff4757';
+            }
+            
+            lastUpdateTime = now;
+        }
+        
+        // Update last sync time
+        function updateLastSync() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            document.getElementById('lastSync').textContent = timeString;
+        }
+        
+        // Socket.IO event handlers
+        socket.on('connect', () => {
+            console.log('✅ Connected to server');
+            document.getElementById('statusText').textContent = 'Connected to Server';
+            document.getElementById('statusDot').className = 'status-dot connected';
+        });
+        
+        socket.on('new_reading', (reading) => {
+            // Update current temperature
+            document.getElementById('currentTempC').textContent = reading.temperature_c.toFixed(1);
+            document.getElementById('currentTempF').textContent = reading.temperature_f.toFixed(1);
+            document.getElementById('lastUpdateTime').textContent = reading.time_display;
+            
+            // Update device status
+            document.getElementById('deviceStatus').textContent = reading.status;
+            document.getElementById('deviceStatus').className = 
+                reading.source === 'REAL' ? 'info-value connected' : 'info-value disconnected';
+            
+            // Update connection type
+            document.getElementById('connectionType').textContent = 
+                reading.source === 'REAL' ? 'Bluetooth' : 'Simulated';
+            document.getElementById('connectionType').className = 
+                reading.source === 'REAL' ? 'info-value connected' : 'info-value disconnected';
+            
+            // Update connection speed
+            updateConnectionSpeed();
+            updateLastSync();
+            
+            // Add to history table
+            addToHistoryTable(reading);
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('❌ Disconnected from server');
+            document.getElementById('statusText').textContent = 'Disconnected';
+            document.getElementById('statusDot').className = 'status-dot';
+        });
+        
+        socket.on('system_status', (status) => {
+            // Update system information
+            if (status.current_reading) {
+                document.getElementById('currentTempC').textContent = 
+                    status.current_reading.temperature_c.toFixed(1);
+                document.getElementById('currentTempF').textContent = 
+                    status.current_reading.temperature_f.toFixed(1);
+                document.getElementById('lastUpdateTime').textContent = 
+                    status.current_reading.time_display;
+            }
+            
+            document.getElementById('updateInterval').textContent = status.update_interval + 's';
+            document.getElementById('macAddress').textContent = status.bluetooth_address;
+        });
+        
+        // Add reading to history table
+        function addToHistoryTable(reading) {
+            const tableBody = document.getElementById('readingsBody');
+            
+            // Remove placeholder if present
+            if (tableBody.rows[0].cells[0].innerHTML.includes('Waiting')) {
+                tableBody.innerHTML = '';
+            }
+            
+            // Create new row
+            const newRow = tableBody.insertRow(0);
+            newRow.innerHTML = `
+                <td class="reading-time">${reading.time_display}</td>
+                <td>${reading.date_display}</td>
+                <td class="reading-temp">${reading.temperature_c.toFixed(1)} °C</td>
+                <td class="reading-temp">${reading.temperature_f.toFixed(1)} °F</td>
+                <td>
+                    <span class="reading-status ${reading.source === 'REAL' ? 'status-real' : 'status-simulated'}">
+                        ${reading.source === 'REAL' ? '📡 REAL' : '⚡ SIMULATED'}
+                    </span>
+                </td>
+            `;
+            
+            // Keep only last 10 readings
+            if (tableBody.rows.length > 10) {
+                tableBody.deleteRow(10);
+            }
+            
+            // Update readings count
+            readingsHistory.push(reading);
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Start uptime counter
+            setInterval(updateUptime, 1000);
+            
+            // Set initial values
+            document.getElementById('macAddress').textContent = 
+                '${config.device_name}' === 'FT95_Thermometer' ? 'FF:00:00:00:01:C8' : '${config.device_name}';
+            document.getElementById('updateInterval').textContent = '${config.update_interval}' || '5s';
+        });
+        
+        // Request initial status
+        socket.emit('request_status');
+        socket.emit('request_readings', { count: 10 });
+    </script>
+</body>
+</html>
