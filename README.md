@@ -1,1 +1,1 @@
-This Project is made to automatically fetect the Temperature of Patient and to display it on Browser and saving it to the Google Sheets. It is done using Python and Flask.
+This Project is made to automatically fetch the Temperature of Patient using Beurer FT-95 Thermometer and to display it on Browser and saving it to the Google Sheets. It is done using Python and Flask.
